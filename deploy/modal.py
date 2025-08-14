@@ -15,16 +15,17 @@ image = modal.Image.from_registry(f"nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04",
             "accelerate",
             "git+https://github.com/fal-ai-community/alphabet-dataset",
             "datasets",
+            "huggingface_hub[hf_xnt]",
         )\
         .add_local_dir("mindiffusion", remote_path="/root/mindiffusion")\
         .add_local_file("train_mnist.py", remote_path="/root/train_mnist.py")
 
 content_volume = modal.Volume.from_name(
-    "diffusion-model-test-content3", create_if_missing=True
+    "diffusion-model-test-content-dit", create_if_missing=True
 )
 
 @app.function(
-    gpu="T4",
+    gpu="A100",
     image=image,
     timeout=24000,
     volumes={"/root/contents": content_volume},

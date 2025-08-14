@@ -15,6 +15,7 @@ from torchvision.utils import save_image, make_grid
 from syntht2i import ShapeDataset
 
 from mindiffusion.unet import NaiveUnet, VAEUnet, CFGVAEUnet
+from mindiffusion.dit import DiT
 from mindiffusion.ddpm import DDPM
 
 
@@ -49,9 +50,11 @@ def train_mnist(
 
     # eps_model = NaiveUnet(3, 3, n_feat=128)
     #eps_model = VAEUnet(4, 4, n_feat=512) 
-    eps_model = CFGVAEUnet(4, 4, n_feat=512, text_dim=10)
+    #eps_model = CFGVAEUnet(4, 4, n_feat=512, text_dim=10)
+    eps_model = DiT(img_size=32)
+    eps_model.initialize_weights()
 
-    ddpm = DDPM(eps_model=eps_model, betas=(1e-4, 0.02), n_T=1000)
+    ddpm = DDPM(eps_model=eps_model, betas=(1e-5, 0.02), n_T=1000)
 
     if os.path.exists(load_path):
         print(f"{load_path} found, loading now")
@@ -91,12 +94,20 @@ def train_mnist(
         ),
     )
 
-    dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=15)
+    dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=15)
     optim = torch.optim.Adam(ddpm.parameters(), lr=1e-5, weight_decay=1e-6)
-    # scheduler = None
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optim, mode="min", factor=0.1, patience=5
-    )
+
+
+
+    warmup_epochs = 10
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            return (epoch + 1)/warmup_epochs
+        return 1.0
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=n_epoch)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #    optim, mode="min", factor=0.1, patience=5
+    #)
 
     for i in range(n_epoch):
         print(f"Epoch {i} : ")

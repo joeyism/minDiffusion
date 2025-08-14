@@ -67,7 +67,8 @@ class DDPM(nn.Module):
 
             pred = self.eps_model(
                 x=z_i,
-                t=torch.tensor(i / self.n_T).to(device).repeat(n_sample, 1),
+                #t=torch.tensor(i / self.n_T).to(device).repeat(n_sample, 1), # unet
+                t=torch.tensor(i / self.n_T).to(device).repeat(n_sample), # dit
                 text=labels
             )
             z_i = (

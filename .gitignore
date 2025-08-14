@@ -3,3 +3,4 @@ __pycache__
 *.pth
 ddpm*.png
 .env
+.claude
