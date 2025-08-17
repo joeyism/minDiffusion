@@ -45,7 +45,7 @@ def to_rgb(image):
 def train_mnist(
     n_epoch: int = 200,
     device: str = "cuda:1",
-    load_path: str = "./contents/ddpm_cifar.pth",
+    load_path: str = "./contents/ddpm_mnist.pth",
 ) -> None:
 
     # eps_model = NaiveUnet(3, 3, n_feat=128)
@@ -94,16 +94,10 @@ def train_mnist(
         ),
     )
 
-    dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=15)
-    optim = torch.optim.Adam(ddpm.parameters(), lr=1e-5, weight_decay=1e-6)
+    dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=15)
+    optim = torch.optim.Adam(ddpm.parameters(), lr=2e-5, weight_decay=1e-6)
 
 
-
-    warmup_epochs = 10
-    def lr_lambda(epoch):
-        if epoch < warmup_epochs:
-            return (epoch + 1)/warmup_epochs
-        return 1.0
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=n_epoch)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     #    optim, mode="min", factor=0.1, patience=5
@@ -137,7 +131,7 @@ def train_mnist(
                 xh = ddpm.sample_vae(4, (C, H, W), labels=labels[:4], device=device)
                 xset = torch.cat([xh, x[:4]], dim=0)
                 grid = make_grid(xset, normalize=True, value_range=(0, 1), nrow=4)
-                save_image(grid, f"./contents/ddpm_sample_cifar{i}.png")
+                save_image(grid, f"./contents/ddpm_sample_mnist{i}.png")
 
             # save model
             torch.save(ddpm.state_dict(), load_path)

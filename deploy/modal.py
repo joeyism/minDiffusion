@@ -25,12 +25,12 @@ content_volume = modal.Volume.from_name(
 )
 
 @app.function(
-    gpu="A100",
+    gpu="A100-80GB",
     image=image,
     timeout=24000,
     volumes={"/root/contents": content_volume},
 )
 def train():
     from train_mnist import train_mnist
-    modal.interact()
+    #modal.interact()
     train_mnist(device="cuda:0")

@@ -166,7 +166,6 @@ class DiT(nn.Module):
         shift, scale = self.final_adaLN_modulation(c).chunk(2, dim=1)
         x = self.final_layer[0](x) # layer norm
         x = x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
-        x = x + 0.1*x_orig
         x = self.final_layer[1](x)
 
         img = self.unpatchify(x)
