@@ -21,7 +21,7 @@ image = modal.Image.from_registry(f"nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04",
         .add_local_file("train_mnist.py", remote_path="/root/train_mnist.py")
 
 content_volume = modal.Volume.from_name(
-    "diffusion-model-test-content-dit", create_if_missing=True
+    "diffusion-model-test-content-dit-rectifiedflow", create_if_missing=True
 )
 
 @app.function(

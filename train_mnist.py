@@ -16,6 +16,7 @@ from syntht2i import ShapeDataset
 
 from mindiffusion.unet import NaiveUnet, VAEUnet, CFGVAEUnet
 from mindiffusion.dit import DiT
+from mindiffusion.rectified_flow import RectifiedFlow
 from mindiffusion.ddpm import DDPM
 
 
@@ -54,18 +55,19 @@ def train_mnist(
     eps_model = DiT(img_size=32)
     eps_model.initialize_weights()
 
-    ddpm = DDPM(eps_model=eps_model, betas=(1e-5, 0.02), n_T=1000)
+    #ddpm = DDPM(eps_model=eps_model, betas=(1e-5, 0.02), n_T=1000)
+    rectified_flow = RectifiedFlow(velocity_model=eps_model, n_T=1000)
 
     if os.path.exists(load_path):
         print(f"{load_path} found, loading now")
         weights = torch.load(load_path)
-        ddpm.load_state_dict(weights)
+        rectified_flow.load_state_dict(weights)
 
-    for param in ddpm.vae.parameters():
+    for param in rectified_flow.vae.parameters():
         param.requires_grad = False
-    ddpm.vae.eval()
+    rectified_flow.vae.eval()
 
-    ddpm.to(device)
+    rectified_flow.to(device)
 
     # dataset = load_dataset("imagefolder", data_dir="/root/data/256x256")
 
@@ -95,7 +97,7 @@ def train_mnist(
     )
 
     dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=15)
-    optim = torch.optim.Adam(ddpm.parameters(), lr=2e-5, weight_decay=1e-6)
+    optim = torch.optim.Adam(rectified_flow.parameters(), lr=2e-5, weight_decay=1e-6)
 
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=n_epoch)
@@ -105,7 +107,7 @@ def train_mnist(
 
     for i in range(n_epoch):
         print(f"Epoch {i} : ")
-        ddpm.train()
+        rectified_flow.train()
 
         pbar = tqdm(dataloader)
         loss_ema = None
@@ -113,28 +115,38 @@ def train_mnist(
             B, C, H, W = x.shape
             optim.zero_grad()
             x = x.to(device)
-            labels = labels.to(device, dtype=x.dtype).reshape(-1, 1) #[batch, 1]
+            # Convert labels to proper embedding format for DiT
+            labels_embedded = torch.zeros(labels.shape[0], 768, device=device, dtype=x.dtype)
+            for j, label in enumerate(labels):
+                labels_embedded[j, int(label.item())] = 1.0  # One-hot encoding in first 10 dims
             #loss = ddpm(x) # non cfg
-            loss = ddpm(x, labels) # cfg
+            loss = rectified_flow(x, labels_embedded) # cfg
             loss.backward()
             if loss_ema is None:
                 loss_ema = loss.item()
             else:
                 loss_ema = 0.9 * loss_ema + 0.1 * loss.item()
             pbar.set_description(f"loss: {loss_ema:.4f}")
-            torch.nn.utils.clip_grad_norm_(ddpm.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(rectified_flow.parameters(), max_norm=1.0)
             optim.step()
 
         if i % 10 == 0:
-            ddpm.eval()
+            rectified_flow.eval()
             with torch.no_grad():
-                xh = ddpm.sample_vae(4, (C, H, W), labels=labels[:4], device=device)
+                #xh = ddpm.sample_vae(4, (C, H, W), labels=labels[:4], device=device)
+                # Create label embeddings for sampling  
+                sample_labels_embedded = torch.zeros(4, 768, device=device, dtype=x.dtype)
+                for j, label in enumerate(labels[:4]):
+                    sample_labels_embedded[j, int(label.item())] = 1.0
+                xh = rectified_flow.sample_rk4(4, (C, H, W), labels=sample_labels_embedded, device=device)
                 xset = torch.cat([xh, x[:4]], dim=0)
                 grid = make_grid(xset, normalize=True, value_range=(0, 1), nrow=4)
+                print(f"Saving image to ./contents/ddpm_sample_mnist{i}.png")
                 save_image(grid, f"./contents/ddpm_sample_mnist{i}.png")
 
             # save model
-            torch.save(ddpm.state_dict(), load_path)
+            print(f"Saving model to {load_path}")
+            torch.save(rectified_flow.state_dict(), load_path)
 
         if loss_ema and scheduler:
             scheduler.step(
