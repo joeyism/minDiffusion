@@ -153,12 +153,21 @@ class DiT(nn.Module):
     def forward(self, x, t, text):
         # x: [batch, channels, height, width]
         # t: [batch]
+        # text: [batch, seq_len, hidden_size] or [batch, hidden_size] if pooled
 
         x_orig = self.patch_embed(x) # [batch, in_channels, hidden_size]
         x = x_orig + self.pos_embed # add positional embedding
 
         t_emb = self.time_embed(t) # [batch, hidden_size]
         c = self.time_mlp(t_emb)   # [batch, hidden_size]
+        
+        # Add text conditioning to time embedding
+        if text is not None:
+            if text.dim() == 3:  # [batch, seq_len, hidden_size]
+                text_pooled = text.mean(dim=1)  # Pool sequence dimension
+            else:  # [batch, hidden_size] - already pooled
+                text_pooled = text
+            c = c + text_pooled  # Combine time and text conditioning
 
         for block in self.transformer_blocks:
             x = block(x, c)
